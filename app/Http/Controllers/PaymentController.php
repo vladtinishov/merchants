@@ -21,10 +21,12 @@ class PaymentController extends Controller
         $this->gateway2Service = $gateway2Service;
     }
 
-    public function callback(MerchantGatewayRequest $request)
+    public function callback(Request $request)
     {
         try {
-            $merchantId = $request->get('merchant_id');
+            $merchantId = $request->has('merchant_id') ?
+                $request->get('merchant_id') :
+                $request->get('project');
             $service = $this->getGatewayService($merchantId);
 
             $service->callback($request);

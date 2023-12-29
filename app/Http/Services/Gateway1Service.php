@@ -6,6 +6,7 @@ use App\Http\Requests\MerchantGatewayRequest;
 use App\Repository\PaymentRepository;
 use Exception;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class Gateway1Service
 {
@@ -22,29 +23,34 @@ class Gateway1Service
      * @return JsonResponse
      * @throws Exception
      */
-    public function callback(MerchantGatewayRequest $request): JsonResponse
+    public function callback(Request $request): JsonResponse
     {
-        $limitReached = $this->checkLimit();
+        $limitReached = $this->paymentRepository->checkLimits(
+            env('MERCHANT_GATEWAY_1_ID'),
+            env('MERCHANT_GATEWAY_1_LIMIT'),
+        );
 
         if ($limitReached) {
             throw new Exception('Limit has been reached');
         }
 
-        $isValidSignature = $this->validateSignature($request->all());
+        $validatedData = $request->validate([
+            'merchant_id' => 'required|integer',
+            'payment_id' => 'required|integer',
+            'status' => 'required|string|in:new,pending,completed,expired,rejected',
+            'amount' => 'required|integer',
+            'amount_paid' => 'required|integer',
+            'timestamp' => 'required|integer',
+            'sign' => 'required|string',
+        ]);
 
-        $paymentData = [
-            'user_id' => 1,
-            'merchant_id' => $request->input('merchant_id'),
-            'payment_id' => $request->input('payment_id'),
-            'status' => $request->input('status'),
-            'amount' => $request->input('amount'),
-        ];
+        $isValidSignature = $this->validateSignature($validatedData);
 
         if (!$isValidSignature) {
             throw new Exception('Invalid signature');
         }
 
-        $this->paymentRepository->create($paymentData);
+        $this->paymentRepository->create($validatedData);
 
         return response()->json(['success' => true]);
     }
@@ -62,20 +68,5 @@ class Gateway1Service
         $signatureData = implode(':', $sortedParams) . env('MERCHANT_GATEWAY_1_KEY');
         $calculatedSignature = hash('sha256', $signatureData);
         return $calculatedSignature === $data['sign'];
-    }
-
-    /**
-     * Checks if payments limit reached
-     * @return bool
-     */
-    private function checkLimit(): bool
-    {
-        $payments = $this->paymentRepository->getToday(env('MERCHANT_GATEWAY_1_ID'), 'merchant_id');
-
-        if ($payments->count() >= env('MERCHANT_GATEWAY_1_LIMIT')) {
-            return true;
-        }
-
-        return false;
     }
 }

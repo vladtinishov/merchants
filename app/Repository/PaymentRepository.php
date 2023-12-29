@@ -25,4 +25,19 @@ class PaymentRepository
     {
         return $this->get($search, $field)->whereDate('created_at', today());
     }
+
+    /**
+     * Checks if payments limit reached
+     * @return bool
+     */
+    public function checkLimits($merchantId, $limit)
+    {
+        $payments = $this->getToday($merchantId, 'merchant_id');
+
+        if ($payments->count() >= $limit) {
+            return true;
+        }
+
+        return false;
+    }
 }
